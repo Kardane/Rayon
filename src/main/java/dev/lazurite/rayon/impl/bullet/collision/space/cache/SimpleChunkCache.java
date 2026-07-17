@@ -22,7 +22,7 @@ public class SimpleChunkCache implements ChunkCache {
     private static final long SLOW_REFRESH_NANOS = 25_000_000L;
     private static final long WARNING_INTERVAL_NANOS = 5_000_000_000L;
     private final MinecraftSpace space;
-    private final Map<BlockPos, BlockData> blockData;
+    private final Map<BlockPos, BlockData> legacyBlockData;
     private final List<FluidColumn> fluidColumns;
     private final Long2ObjectMap<List<FluidColumn>> fluidColumnByIndex;
     private final LongSet activePositions;
@@ -32,7 +32,7 @@ public class SimpleChunkCache implements ChunkCache {
 
     SimpleChunkCache(MinecraftSpace space) {
         this.space = space;
-        this.blockData = new ConcurrentHashMap<>();
+        this.legacyBlockData = new ConcurrentHashMap<>();
         this.fluidColumns = new ArrayList<>();
         this.activePositions = new LongOpenHashSet();
         this.activeColumn = new Long2ObjectOpenHashMap<>(65536);
@@ -56,6 +56,10 @@ public class SimpleChunkCache implements ChunkCache {
 
     @Override
     public synchronized void loadBlockData(BlockPos blockPos) {
+        if (space.getTerrainMode().usesSectionCache()) {
+            space.getTerrainSectionCache().markDirty(blockPos);
+            return;
+        }
         final var level = space.getLevel();
         final var blockState = level.getBlockState(blockPos);
 
@@ -64,13 +68,13 @@ public class SimpleChunkCache implements ChunkCache {
 
     private void loadBlockData(BlockPos blockPos, ServerLevel level, BlockState blockState) {
         if (ChunkCache.isValidBlock(blockState)) {
-            this.blockData.put(blockPos, new BlockData(
+            this.legacyBlockData.put(blockPos, new BlockData(
                     blockPos,
                     blockState,
                     ShapeCache.getCollisionBoxes(blockState, level, blockPos)
             ));
         } else {
-            this.blockData.remove(blockPos);
+            this.legacyBlockData.remove(blockPos);
         }
     }
 
@@ -78,6 +82,7 @@ public class SimpleChunkCache implements ChunkCache {
     public synchronized void refreshAll() {
         long started = System.nanoTime();
         final var level = space.getLevel();
+        final boolean legacy = !space.getTerrainMode().usesSectionCache();
         this.activePositions.clear();
         this.activeColumn.clear();
         int scannedBlocks = 0;
@@ -125,10 +130,12 @@ public class SimpleChunkCache implements ChunkCache {
                         }
 
                         this.activeColumn.computeIfAbsent(columnIndex(pos), ignored -> new ObjectArrayList<>(512)).add(pos);
-                        var previous = this.blockData.get(pos);
-                        final var blockState = level.getBlockState(pos);
-                        if (previous == null || previous.blockState() != blockState) {
-                            loadBlockData(pos, level, blockState);
+                        if (legacy) {
+                            var previous = this.legacyBlockData.get(pos);
+                            final var blockState = level.getBlockState(pos);
+                            if (previous == null || previous.blockState() != blockState) {
+                                loadBlockData(pos, level, blockState);
+                            }
                         }
 
                         if (this.getFluidColumn(pos).isEmpty()) {
@@ -143,7 +150,9 @@ public class SimpleChunkCache implements ChunkCache {
             }
         }
 
-        this.blockData.keySet().removeIf(blockPos -> !this.activePositions.contains(blockPos.asLong()));
+        if (legacy) {
+            this.legacyBlockData.keySet().removeIf(blockPos -> !this.activePositions.contains(blockPos.asLong()));
+        }
         this.fluidColumns.removeIf(column -> {
             var x = !isInActiveColumn(column);
 
@@ -169,13 +178,13 @@ public class SimpleChunkCache implements ChunkCache {
             lastSlowWarningAt = finished;
             Rayon.LOGGER.warn("{} 월드의 지형 snapshot 갱신이 {} ms 걸렸습니다. blocks={}, fluids={}",
                     space.getLevel().dimension().location(), elapsed / 1_000_000.0,
-                    blockData.size(), fluidColumns.size());
+                    legacy ? legacyBlockData.size() : space.getTerrainSectionCache().getBlockData().size(), fluidColumns.size());
         }
     }
 
     @Override
     public synchronized void evictChunk(int chunkX, int chunkZ) {
-        blockData.keySet().removeIf(pos -> (pos.getX() >> 4) == chunkX && (pos.getZ() >> 4) == chunkZ);
+        legacyBlockData.keySet().removeIf(pos -> (pos.getX() >> 4) == chunkX && (pos.getZ() >> 4) == chunkZ);
 
         var activeIterator = activePositions.iterator();
         while (activeIterator.hasNext()) {
@@ -207,7 +216,7 @@ public class SimpleChunkCache implements ChunkCache {
 
     @Override
     public synchronized void clear() {
-        blockData.clear();
+        legacyBlockData.clear();
         fluidColumns.clear();
         fluidColumnByIndex.clear();
         activePositions.clear();
@@ -249,7 +258,10 @@ public class SimpleChunkCache implements ChunkCache {
 
     @Override
     public synchronized List<BlockData> getBlockData() {
-        return new ArrayList<>(this.blockData.values());
+        if (space.getTerrainMode().usesSectionCache()) {
+            return space.getTerrainSectionCache().getBlockData();
+        }
+        return new ArrayList<>(this.legacyBlockData.values());
     }
 
     @Override
@@ -259,7 +271,10 @@ public class SimpleChunkCache implements ChunkCache {
 
     @Override
     public synchronized Optional<BlockData> getBlockData(BlockPos blockPos) {
-        return Optional.ofNullable(this.blockData.get(blockPos));
+        if (space.getTerrainMode().usesSectionCache()) {
+            return space.getTerrainSectionCache().getBlockData(blockPos);
+        }
+        return Optional.ofNullable(this.legacyBlockData.get(blockPos));
     }
 
     @Override

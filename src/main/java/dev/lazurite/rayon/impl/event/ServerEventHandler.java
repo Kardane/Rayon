@@ -7,7 +7,6 @@ import dev.lazurite.rayon.impl.bullet.collision.body.EntityRigidBody;
 import dev.lazurite.rayon.impl.bullet.collision.space.MinecraftSpace;
 import dev.lazurite.rayon.impl.bullet.collision.space.generator.EntityCollisionGenerator;
 import dev.lazurite.rayon.impl.bullet.collision.space.generator.PressureGenerator;
-import dev.lazurite.rayon.impl.bullet.collision.space.generator.TerrainGenerator;
 import dev.lazurite.rayon.impl.bullet.math.Convert;
 import dev.lazurite.rayon.impl.lifecycle.RayonServerRuntime;
 import dev.lazurite.rayon.impl.serialization.PhysicsStateHolder;
@@ -33,7 +32,6 @@ public final class ServerEventHandler {
         registered = true;
 
         PhysicsSpaceEvents.STEP.register(PressureGenerator::step);
-        PhysicsSpaceEvents.STEP.register(TerrainGenerator::step);
 
         ServerLifecycleEvents.SERVER_STARTING.register(RayonServerRuntime::start);
         ServerLifecycleEvents.SERVER_STOPPING.register(server ->

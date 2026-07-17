@@ -8,23 +8,34 @@ import dev.lazurite.rayon.impl.bullet.collision.space.block.BlockProperty;
 import dev.lazurite.rayon.impl.bullet.collision.space.cache.ChunkCache;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
+
+import java.util.List;
 
 public class TerrainRigidBody extends MinecraftRigidBody {
     private final BlockPos blockPos;
     private final BlockState state;
+    private final List<AABB> collisionBoxes;
 
     public static TerrainRigidBody from(MinecraftSpace space, ChunkCache.BlockData blockData) {
         final var blockProperty = BlockProperty.getBlockProperty(blockData.blockState().getBlock());
         final var friction = blockProperty == null ? 0.75f : blockProperty.friction();
         final var restitution = blockProperty == null ? 0.25f : blockProperty.restitution();
         var shape = MinecraftShape.concave(Triangle.getMeshOfBoxes(blockData.collisionBoxes()));
-        return new TerrainRigidBody(space, shape, blockData.blockPos(), blockData.blockState(), friction, restitution);
+        return new TerrainRigidBody(space, shape, blockData.blockPos(), blockData.blockState(),
+                blockData.collisionBoxes(), friction, restitution);
     }
 
     public TerrainRigidBody(MinecraftSpace space, MinecraftShape shape, BlockPos blockPos, BlockState blockState, float friction, float restitution) {
+        this(space, shape, blockPos, blockState, List.of(), friction, restitution);
+    }
+
+    private TerrainRigidBody(MinecraftSpace space, MinecraftShape shape, BlockPos blockPos, BlockState blockState,
+                             List<AABB> collisionBoxes, float friction, float restitution) {
         super(space, shape);
         this.blockPos = blockPos;
         this.state = blockState;
+        this.collisionBoxes = List.copyOf(collisionBoxes);
 
         this.setFriction(friction);
         this.setRestitution(restitution);
@@ -37,6 +48,10 @@ public class TerrainRigidBody extends MinecraftRigidBody {
 
     public BlockState getBlockState() {
         return this.state;
+    }
+
+    public boolean matches(ChunkCache.BlockData blockData) {
+        return state == blockData.blockState() && collisionBoxes.equals(blockData.collisionBoxes());
     }
 
     @Override

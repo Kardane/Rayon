@@ -13,6 +13,9 @@ import dev.lazurite.rayon.impl.bullet.collision.body.ElementRigidBody;
 import dev.lazurite.rayon.impl.bullet.collision.body.EntityRigidBody;
 import dev.lazurite.rayon.impl.bullet.collision.body.TerrainRigidBody;
 import dev.lazurite.rayon.impl.bullet.collision.space.cache.ChunkCache;
+import dev.lazurite.rayon.impl.bullet.collision.space.cache.TerrainMode;
+import dev.lazurite.rayon.impl.bullet.collision.space.cache.TerrainSectionCache;
+import dev.lazurite.rayon.impl.bullet.collision.space.generator.TerrainGenerator;
 import dev.lazurite.rayon.impl.bullet.thread.PhysicsExecutor;
 import dev.lazurite.rayon.impl.lifecycle.BodyTransformResult;
 import dev.lazurite.rayon.impl.lifecycle.RayonServerRuntime;
@@ -46,6 +49,8 @@ public final class MinecraftSpace extends PhysicsSpace implements PhysicsCollisi
     private final PhysicsExecutor executor;
     private final ServerLevel level;
     private final String levelName;
+    private final TerrainMode terrainMode;
+    private final TerrainSectionCache terrainSectionCache;
     private final ChunkCache chunkCache;
     private volatile boolean destroyed;
 
@@ -68,7 +73,10 @@ public final class MinecraftSpace extends PhysicsSpace implements PhysicsCollisi
         this.executor = executor;
         this.level = level;
         this.levelName = levelName;
+        this.terrainMode = TerrainMode.configured();
+        this.terrainSectionCache = new TerrainSectionCache(this);
         this.chunkCache = ChunkCache.create(this);
+        Rayon.LOGGER.info("{} 월드의 지형 모드는 {}입니다.", levelName, terrainMode.propertyValue());
         setGravity(new Vector3f(0, -9.807f, 0));
         addCollisionListener(this);
         setAccuracy(1f / 60f);
@@ -76,8 +84,21 @@ public final class MinecraftSpace extends PhysicsSpace implements PhysicsCollisi
 
     /** 서버 스레드에서 다음 물리 작업이 소비할 지형 snapshot을 갱신한다. */
     public void prepareTick() {
-        if (!destroyed) {
-            chunkCache.refreshAll();
+        if (destroyed) {
+            return;
+        }
+
+        // 유체 snapshot은 section cache 모드에서도 기존 동작을 유지한다.
+        chunkCache.refreshAll();
+        if (terrainMode.usesSectionCache()) {
+            long gameTick = level.getGameTime();
+            List<ElementRigidBody.ServerBodySnapshot> bodySnapshots = elementBodies.stream()
+                    .map(ElementRigidBody::getServerSnapshot)
+                    .toList();
+            terrainSectionCache.updateDemand(bodySnapshots, gameTick);
+            terrainSectionCache.snapshotPendingSections(level, terrainSectionCache.snapshotSectionsPerTick());
+            terrainSectionCache.evictExpired(gameTick);
+            terrainSectionCache.logMetrics(gameTick);
         }
     }
 
@@ -105,6 +126,7 @@ public final class MinecraftSpace extends PhysicsSpace implements PhysicsCollisi
             }
 
             wakeBodiesNearChangedSections();
+            TerrainGenerator.step(this);
             if (!isEmpty()) {
                 for (int substep = 0; substep < 3; substep++) {
                     distributeEvents();
@@ -198,11 +220,17 @@ public final class MinecraftSpace extends PhysicsSpace implements PhysicsCollisi
     }
 
     public void doBlockUpdate(BlockPos blockPos) {
+        if (terrainMode.usesSectionCache()) {
+            terrainSectionCache.markDirty(blockPos);
+        }
         blockUpdates.add(SectionPos.of(blockPos));
     }
 
     /** 서버 스레드에서 cache snapshot을 제거하고, 물리 스레드에서 Bullet terrain을 해제한다. */
     public void evictChunk(int chunkX, int chunkZ) {
+        if (terrainMode.usesSectionCache()) {
+            terrainSectionCache.evictChunk(chunkX, chunkZ);
+        }
         chunkCache.evictChunk(chunkX, chunkZ);
         executor.execute(() -> {
             for (var entry : getTerrainMap().entrySet()) {
@@ -255,6 +283,14 @@ public final class MinecraftSpace extends PhysicsSpace implements PhysicsCollisi
         return chunkCache;
     }
 
+    public TerrainMode getTerrainMode() {
+        return terrainMode;
+    }
+
+    public TerrainSectionCache getTerrainSectionCache() {
+        return terrainSectionCache;
+    }
+
     public void destroySpace() {
         if (destroyed) {
             return;
@@ -264,6 +300,7 @@ public final class MinecraftSpace extends PhysicsSpace implements PhysicsCollisi
             removeCollisionObject(collisionObject);
         }
         completedResults.clear();
+        terrainSectionCache.clear();
         chunkCache.clear();
         terrainMap.clear();
         elementBodies.clear();
