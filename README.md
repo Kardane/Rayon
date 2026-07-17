@@ -10,12 +10,13 @@ Rayon은 Minecraft Java Edition 1.21.8 Dedicated Server에서 강체 물리를 �
 - Java 21 이상
 - Fabric Loader 0.19.3 이상
 - Fabric API 0.136.1+1.21.8 이상
+- Polymer 0.13.13+1.21.8 (Rayon JAR에 포함)
 
 Forge, NeoForge, Architectury와 클라이언트 렌더링은 지원하지 않습니다.
 
 ## 설치
 
-`rayon-2.0.0+1.21.8.jar`와 Fabric API를 서버의 `mods` 폴더에 넣습니다. Rayon JAR에는 Java용 Libbulletjme가 포함되며, 지원 플랫폼의 네이티브는 최초 시작 시 `<서버 폴더>/.rayon/natives/17.4.0/` 아래 해시 캐시에 추출됩니다.
+`rayon-2.0.0+1.21.8.jar`와 Fabric API를 서버의 `mods` 폴더에 넣습니다. Rayon JAR에는 Polymer Core, Virtual Entity, Resource Pack 모듈과 Java용 Libbulletjme가 포함되며, 지원 플랫폼의 네이티브는 최초 시작 시 `<서버 폴더>/.rayon/natives/17.4.0/` 아래 해시 캐시에 추출됩니다.
 
 기본 지원 플랫폼은 다음과 같습니다.
 
@@ -37,6 +38,8 @@ Dedicated Server 개발 실행은 다음 명령을 사용합니다.
 ```powershell
 .\gradlew.bat runServer --no-daemon
 ```
+
+Polymer 의존성은 `gradle.properties`의 `polymer_version`으로 관리하며, 현재 Minecraft 1.21.8 호환 버전인 `0.13.13+1.21.8`을 사용합니다. 다음 개발 단계에서는 서버사이드 가상 엔티티와 리소스 팩 확장을 바로 사용할 수 있습니다.
 
 빌드 산출물은 `build\libs\rayon-2.0.0+1.21.8.jar`입니다. 빌드는 Fabric 공식 Mojang mappings를 사용하며 Lazurite Maven 저장소, Toolbox, Transporter에 의존하지 않습니다.
 

@@ -12,6 +12,9 @@ base {
 
 repositories {
     mavenCentral()
+    maven {
+        url = uri("https://maven.nucleoid.xyz")
+    }
 }
 
 dependencies {
@@ -20,6 +23,11 @@ dependencies {
 
     modImplementation "net.fabricmc:fabric-loader:${loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+
+    // 1.21.8 서버사이드 미니게임 개발용 Polymer 모듈
+    modImplementation include("eu.pb4:polymer-core:${polymer_version}")
+    modImplementation include("eu.pb4:polymer-virtual-entity:${polymer_version}")
+    modImplementation include("eu.pb4:polymer-resource-pack:${polymer_version}")
 
     implementation "com.github.stephengold:Libbulletjme:${libbulletjme_version}"
     include "com.github.stephengold:Libbulletjme:${libbulletjme_version}"
