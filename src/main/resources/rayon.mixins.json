@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.lazurite.rayon.impl.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "common.BlockUpdateMixin",
+    "common.entity.EntityMixin",
+    "common.entity.ExplosionMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

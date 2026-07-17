@@ -1,0 +1,58 @@
+name: 빌드 검증
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - name: 소스 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Java 21 설정
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Gradle 설정
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 금지된 클라이언트 및 구 로더 참조 검사
+        shell: pwsh
+        run: |
+          $patterns = @(
+            'net\.minecraft\.client',
+            'com\.mojang\.blaze3d',
+            'ClientModInitializer',
+            'dev\.architectury',
+            'net\.minecraftforge',
+            'dev\.lazurite\.toolbox',
+            'dev\.lazurite\.transporter'
+          )
+          $matches = Get-ChildItem -LiteralPath '.\src\main' -Recurse -File |
+            Select-String -Pattern $patterns
+          if ($matches) {
+            $matches | ForEach-Object { Write-Error $_.ToString() }
+            throw '서버 전용 코드에 금지된 참조가 있습니다.'
+          }
+
+      - name: clean build
+        shell: pwsh
+        run: .\gradlew.bat clean build --no-daemon
+
+      - name: JAR 구성 검사
+        shell: pwsh
+        run: |
+          $jar = Get-ChildItem -LiteralPath '.\build\libs' -Filter 'rayon-*.jar' |
+            Where-Object { $_.Name -notmatch 'sources' } |
+            Select-Object -First 1
+          if (-not $jar) { throw 'Rayon 배포 JAR을 찾지 못했습니다.' }
+          $entries = & jar tf $jar.FullName
+          $forbidden = $entries | Select-String -Pattern '(^|/)forge/|architectury|mixin/client|ClientEventHandler|EntityNetworking'
+          if ($forbidden) {
+            $forbidden | ForEach-Object { Write-Error $_.ToString() }
+            throw '배포 JAR에 제거 대상 코드가 포함되어 있습니다.'
+          }

@@ -1,64 +1,81 @@
 plugins {
-    id 'com.github.johnrengelman.shadow' version "$shadow_version"
-    id 'architectury-plugin' version "$architectury_plugin_version"
-    id 'dev.architectury.loom' version "$loom_version" apply false
-    id 'java'
+    id 'fabric-loom' version "${loom_version}"
+    id 'maven-publish'
 }
 
-architectury {
-    minecraft = rootProject.minecraft_version
+version = "${mod_version}+${minecraft_version}"
+group = maven_group
+
+base {
+    archivesName = archives_base_name
 }
 
-subprojects {
-    apply plugin: 'com.github.johnrengelman.shadow'
-    apply plugin: 'dev.architectury.loom'
-    apply plugin: 'architectury-plugin'
-    apply plugin: 'maven-publish'
+repositories {
+    mavenCentral()
+}
 
-    version "${mod_version}+${minecraft_version}"
-    group maven_group
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    mappings loom.officialMojangMappings()
 
-    archivesBaseName = rootProject.archivesBaseName + '-' + name
-    loom.silentMojangMappingsLicense()
+    modImplementation "net.fabricmc:fabric-loader:${loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
 
-    java {
-        toolchain {
-            languageVersion = JavaLanguageVersion.of(17)
+    implementation "com.github.stephengold:Libbulletjme:${libbulletjme_version}"
+    include "com.github.stephengold:Libbulletjme:${libbulletjme_version}"
+}
+
+loom {
+    runs {
+        server {
+            server()
+            name = 'Rayon Dedicated Server'
+            runDir = 'run'
         }
-
-        withSourcesJar()
     }
+}
 
-    repositories {
-        maven {
-            name 'Lazurite'
-            url 'https://lazurite.dev/releases'
-        }
-        mavenLocal()
+tasks.named('runServer') {
+    notCompatibleWithConfigurationCache('Loom 실행 인자 파일은 clean 이후 다시 생성되어야 합니다.')
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
     }
+    withSourcesJar()
+}
 
-    dependencies {
-        minecraft "com.mojang:minecraft:$minecraft_version"
-        mappings loom.officialMojangMappings()
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+    options.compilerArgs.add('-Xlint:deprecation')
+}
+
+def resourceProperties = [
+        version           : version.toString(),
+        minecraft_version : minecraft_version.toString(),
+        loader_version    : loader_version.toString(),
+        fabric_api_version: fabric_api_version.toString()
+]
+
+processResources {
+    inputs.properties resourceProperties
+    filesMatching('fabric.mod.json') {
+        expand resourceProperties
     }
+}
 
-    publishing {
-        repositories {
-            maven {
-                name 'Lazurite'
-                url 'https://lazurite.dev/releases'
-                credentials(PasswordCredentials)
-                authentication {
-                    register("basic", BasicAuthentication)
-                }
-            }
-        }
+tasks.withType(AbstractArchiveTask).configureEach {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
 
-        publications {
-            "${project.name}"(MavenPublication) {
-                artifactId = archivesBaseName
-                from components.java
-            }
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifactId = archives_base_name
+            from components.java
         }
     }
 }

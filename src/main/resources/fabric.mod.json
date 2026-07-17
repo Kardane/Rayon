@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "rayon",
+  "version": "${version}",
+  "name": "Rayon",
+  "description": "Minecraft 1.21.8용 서버 권한 물리 API입니다.",
+  "authors": [
+    "The Lazurite Team"
+  ],
+  "contact": {
+    "sources": "https://github.com/Kardane/Rayon",
+    "issues": "https://github.com/Kardane/Rayon/issues"
+  },
+  "license": "MIT",
+  "environment": "server",
+  "icon": "icon.png",
+  "entrypoints": {
+    "main": [
+      "dev.lazurite.rayon.RayonMod"
+    ]
+  },
+  "mixins": [
+    "rayon.mixins.json"
+  ],
+  "depends": {
+    "java": ">=21",
+    "minecraft": "~${minecraft_version}",
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": ">=${fabric_api_version}"
+  }
+}
