@@ -1,4 +1,8 @@
 docs/
+.agents/
+.codegraph/
+.codex/
+.run/
 # gradle
 
 .DS_Store
